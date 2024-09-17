@@ -52,3 +52,18 @@ let printFigureValue v =
 printFigureValue fd
 printFigureValue fh
 printFigureValue fw
+
+
+
+type CustomerId = CustomerId of int
+//   ^型名         ^ケースラベル
+let customerId = CustomerId 42
+
+
+let (CustomerId innerValue) = customerId
+printfn "%d" innerValue
+
+
+
+let processCustomerId (CustomerId innerValue) = 
+    printfn "%d" innerValue

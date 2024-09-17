@@ -2,6 +2,11 @@
 「関数型ドメインモデリング」の学習内容をアウトプットするスクラップ
 https://amzn.asia/d/i3VaTIU
 
+
+# Todo: 書籍のコードrepoを探す
+
+https://github.com/swlaschin/DomainModelingMadeFunctional
+
 # 前提条件
 私の学習前は以下の状態である
 - F#は軽く触ったことがある程度
@@ -514,5 +519,210 @@ unitを使う(関数型では関数は何かしらの値を返却しなければ
 ドメイン型を一つにまとめる
 依存する関数はそのファイルのうしろにまとめる
 
+# 5章 型によるドメインモデリング
 
-# Todo: 書籍のコードrepoを探す
+共有されたドメインモデルがコードにも反映されていなければならない
+
+これができていればドメインモデルをコードに翻訳する必要が無い
+
+理想的には他の非開発者がコードレビューや設計確認できるのが望ましい
+
+この強力な型システムで設計と実装がずれない
+
+## 単純な値
+
+ドメインエキスパートはintやstringではなく、OrderId等のドメインの概念で型を考える
+
+おなじintであらわされるものでも互換性があるわけではないことを明確にする
+
+単純型を作る
+```fs
+type CustomerId = CustomerId of int
+//   ^型名         ^ケースラベル
+let customerId = CustomerId 42
+```
+単純型ではケースラベルと型名を同一にする
+ケース名がコンストラクタになるから
+
+同じintでも別の単純型にすることで混同しないようになる
+分解するにはケースラベルでパターンマッチ
+```fs
+let (CustomerId innerValue) = customerId
+printfn "%d" innerValue
+```
+
+
+関数定義で直接分解することはある
+```fs
+let processCustomerId (CustomerId innerValue) = 
+    printfn "%d" innerValue
+```
+
+### 単純型のパフォーマンス問題を回避
+
+
+単純型を使用することは
+メモリ使用率と効率性の犠牲がある
+
+改善例
+- 単純型ではなく型エイリアスを使う -> 型の安全性は下がる
+```fs
+type UnitQuantity = int
+```
+- 参照型ではなく値型(構造体)を使う
+```fs
+[<Struct>]
+type UnitQuantity = UnitQuantity of int
+```
+- コレクション全体を一つの型とする
+```fs
+type UnitQyantities = UnitQyantities of int[]
+```
+
+## 複雑なデータ
+
+Orderが下記のようになっている場合
+```
+data Order = 
+    CustomerInfo
+    AND ShippingAddress
+    AND BillingAddress
+    AND list of IrderLines
+    AND AmountToBill
+```
+↓
+```fs
+type Order = {
+    CustomerInfo : CustomerInfo
+    ShippingAddress : ShippingAddress
+    BillingAddress : BillingAddress
+    OrderLines : OrderLine list
+    AmountToBill : AmountToBill
+}
+```
+この時、複雑な型で使用される型の実態が不明
+
+ドメインエキスパートに協力してもらうことで実現した方が良い
+ShippingAddressとBillingAddressを別物として扱う場合は論理的に分離するなど
+
+### 未知の型のモデリング
+
+モデリングしたい型の明確な型が不明な場合がある
+
+未定義の型を表現したい場合、例外型のexnをUndefinedとエイリアスする
+
+```fs
+type Undefined = exn
+
+type CustomerInfo = Undefined
+type ShippingAddress = Undefined
+type BillingAddress = Undefined
+type OrderLines = Undefined
+type AmountToBill = Undefined
+
+type Order = {
+    CustomerInfo : CustomerInfo
+    ShippingAddress : ShippingAddress
+    BillingAddress : BillingAddress
+    OrderLines : OrderLine list
+    AmountToBill : AmountToBill
+}
+```
+
+### 選択型によるモデリング
+
+```
+data ProductCode = 
+    WidgetCode
+    OR GizmoCode
+```
+
+```fs
+type ProductCode = 
+    | WidgetCode of WidgetCode
+    | GizmoCode of GizmoCode
+```
+
+ここまでで名詞をモデリングできる
+
+## ワークフローのモデリング
+
+動詞をモデリングする
+
+```fs
+type ValidateOrder = UnvalidatedOrder -> ValidatedOrder
+```
+
+### 複雑な入出力
+
+#### 出力
+
+AとBの両方を出力する場合、そのようにするレコード型を作成
+
+```fs
+type out = {
+    A : A
+    B : B
+}
+```
+どちらかを出力する場合は、選択型にする
+
+```fs
+type out =
+    | A of A
+    | B of B
+```
+
+#### 入力
+
+入力に選択肢がある場合、選択型にする
+
+すべて必須であるとき、複数のアプローチになる
+
+
+- 別のパラメータとする
+```fs
+// Bが入力ではなく依存関係である場合はこのアプローチ
+// DIと同等の機能を使える
+type WorkFlow = A -> B -> Out
+```
+- 入力用のレコード型
+```fs
+// AとBそれぞれの入力が常に必要である場合
+// タプルでもできるが、名前付きの型の方が良い
+type Input = {
+    A : A
+    B : B
+}
+type WorkFlow = Input -> Out
+```
+
+### 関数のシグネチャでエフェクトを文書化
+
+#### エフェクトとは
+
+関数が主な入出力以外に行うことを説明する時に使う言葉
+
+例えば、検証する関数で検証失敗が発生する場合はResult型
+非同期処理をする場合Async型を返却するなど
+
+```fs
+type ValidateOrder =
+    UnvalidatedOrder -> Async<Result<ValidatedOrder, ValiudatioinError list>>
+```
+さらに型エイリアスで見た目を整える
+```fs
+type ValidationResponse<'a> = Async<Result<'a, ValiudatioinError list>>
+type ValidateOrder = UnvalidatedOrder -> ValidationResponse<ValidatedOrder>
+```
+
+## アイデンティティの考察
+
+永続的なIDを持つかどうかでデータ型を分類
+
+### エンティティ
+永続的なアイデンティティを持つオブジェクト
+
+### 値オブジェクト
+永続的なアイデンティティを持たないオブジェクト
+
