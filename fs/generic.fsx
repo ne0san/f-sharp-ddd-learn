@@ -1,5 +1,4 @@
-let areEqual x y =
-    (x = y)
+let areEqual x y = (x = y)
 
 
 printfn "%b" (areEqual 2 3)

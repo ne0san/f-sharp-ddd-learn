@@ -10,12 +10,12 @@ type CardNumber = CardNumber of string
 
 // 低レベル型をいくつか構築
 type CardType =
-    Visa | Mastercard
+    | Visa
+    | Mastercard
 
-type CreditCardInfo = {
-    CardType: CardType
-    CardNumber: CardNumber
-}
+type CreditCardInfo =
+    { CardType: CardType
+      CardNumber: CardNumber }
 
 type PaymentMethod =
     | Cash
@@ -23,11 +23,12 @@ type PaymentMethod =
     | Card of CreditCardInfo
 
 type PaymentAmount = PaymentAmount of decimal
-type Currency = EUR | USD
 
-type Payment = {
-    Amount: PaymentAmount
-    Currency: Currency
-    Method: PaymentMethod
-}
+type Currency =
+    | EUR
+    | USD
 
+type Payment =
+    { Amount: PaymentAmount
+      Currency: Currency
+      Method: PaymentMethod }
