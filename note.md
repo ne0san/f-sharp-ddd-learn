@@ -726,3 +726,113 @@ type ValidateOrder = UnvalidatedOrder -> ValidationResponse<ValidatedOrder>
 ### 値オブジェクト
 永続的なアイデンティティを持たないオブジェクト
 
+例
+WidgetCodeのインスタンスが"W123"同士である場合、等価とみなす
+
+```fs
+type WidgetCode = WidgetCode of string
+let widgetCode1 = WidgetCode "W123"
+let widgetCode2 = WidgetCode "W123"
+printfn "%b" (widgetCode1 = widgetCode2) // true
+```
+
+単純型でなくとも当てはまる
+```fs
+[<Struct>]
+type FirstName = FirstName of string
+[<Struct>]
+type LastName = LastName of string
+[<Struct>]
+type PersonalName = {
+    FirstName : FirstName
+    LastName : LastName
+}
+let name1 = {
+    FirstName = FirstName "test";
+    LastName = LastName "test2"
+}
+let name2 = {
+    FirstName = FirstName "test";
+    LastName = LastName "test2"
+}
+printfn "%b" (name1 = name2) // true
+```
+
+### 値オブジェクトの透過性の実装
+
+F#はデフォルトでフィールドベースの透過性を実装してくれる。しゅごい！
+
+選択型なら同じケースで内容が同じ値であるときに等しくなる
+
+## アイデンティティ
+
+### エンティティとは
+
+構成要素が変わっても固有のアイデンティティを持つものであることをモデル化することがよくある
+このようなもの
+
+ビジネス上では多くの場合、何らかの文書
+
+ライフサイクルがあり、ビジネスプロセスである状態から別の状態に変換される
+
+#### 何をエンティティとするか
+文脈次第
+
+端末製造過程で固有のシリアルが与えられる場合、
+その端末はエンティティである
+
+販売時はシリアルは関係ない
+この場合は値オブジェクト
+
+### エンティティの識別子
+
+他の値がどんな変更があっても安定している必要がある
+IDのような一意のキーを与える必要がある
+
+このキーは実際のドメイン自体によって提供される場合がある
+無ければUUIDなど自前で作る必要がある
+```fs
+type UserId = UserId of string
+
+type User = {
+    UserId: UserId
+    // あとは省略
+}
+// 他のパラメータが変わってもUserIdが不変
+```
+
+### データ定義への識別子の追加
+
+モデルの内側に識別子を追加するのが一般的
+
+外側にすると型が複数に分散する
+
+
+```fs
+type UnpaidInvoice = {
+    InvoiceId : InvoiceId //内側にあるID
+    // その他各パラメータ
+}
+
+type PaidInvoice = {
+    InvoiceId : InvoiceId
+    // その他各パラメータ
+}
+
+type Invoice = 
+    | Unpaid of UnpaidInvoice
+    | Paid of PaidInvoice
+```
+
+この時、パターンマッチでIDも含めてすべてのデータを一度で見れる
+
+### エンティティに対する等価性の実装
+
+同一のエンティティであるか確認するために
+識別子だけ比較したい
+
+以下を行う
+
+1. Equalsをオーバーライド
+2. GetHashCodeをオーバーライド
+3. CustomEqualityとNoComparison属性を追加して、デフォルトの動作を変えたことをコンパイラに伝える
