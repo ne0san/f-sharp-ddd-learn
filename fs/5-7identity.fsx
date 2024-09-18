@@ -41,7 +41,7 @@ type User = {
 with
     override this.Equals(obj) =
         match obj with
-        | :? User as u -> this.UserId = c.UserId
+        | :? User as u -> this.UserId = u.UserId
         | _ -> false
     override this.GetHashCode() =
         hash this.UserId
