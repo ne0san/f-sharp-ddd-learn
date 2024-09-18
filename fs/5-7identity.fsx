@@ -48,7 +48,7 @@ let invoice = {
 }
 // 中身に対してパターンマッチでばらさないといけない
 match invoice.InvoiceInfo with
-    | Unpaid _unoaidInvoice ->
+    | Unpaid _unpaidInvoice ->
         printfn "unpaid %A" invoice.InvoiceId
     | Paid _paidInvoice ->
         printfn "paid %A" invoice.InvoiceId
@@ -61,7 +61,7 @@ type UserId = UserId of string
 type EMailAddress = EMailAddress of string
 
 // 比較をオーバーライドする
-[<CustomEquality>; NoComparison]
+[<CustomEquality; NoComparison>]
 type User = {
     UserId: UserId
     EMailAddress: EMailAddress
