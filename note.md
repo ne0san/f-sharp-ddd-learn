@@ -806,8 +806,33 @@ type User = {
 モデルの内側に識別子を追加するのが一般的
 
 外側にすると型が複数に分散する
+#### 外側で表現する時
+```fs
+type UnpaidInvoiceInfo = UnpaidInvoiceInfo of string
+type PaidInvoiceInfo = PaidInvoiceInfo of string
 
+type InvoiceInfo =
+    | Unpaid of UnpaidInvoiceInfo
+    | Paid of PaidInvoiceInfo
 
+type InvoiceId = InvoiceId of string
+type Invoice = {
+    InvoiceId: InvoiceId
+    InvoiceInfo: InvoiceInfo
+}
+let invoice = {
+    InvoiceId = InvoiceId "testID";
+    InvoiceInfo = UnpaidInvoiceInfo "string" |> Unpaid;
+}
+// 中身に対してパターンマッチでばらさないといけない
+match invoice.InvoiceInfo with
+    | Unpaid _unoaidInvoice ->
+        printfn "unpaid %A" invoice.InvoiceId
+    | Paid _paidInvoice ->
+        printfn "paid %A" invoice.InvoiceId
+```
+
+#### 内側で表現する時
 ```fs
 type UnpaidInvoice = {
     InvoiceId : InvoiceId //内側にあるID
@@ -825,6 +850,14 @@ type Invoice =
 ```
 
 この時、パターンマッチでIDも含めてすべてのデータを一度で見れる
+
+```fs
+match invoice with
+    | Unpaid unoaidInvoice ->
+        printfn "unpaid %A" unpaidInvoice.InvoiceId
+    | Paid paidInvoice ->
+        printfn "paid %A" paidInvoice.InvoiceId
+```
 
 ### エンティティに対する等価性の実装
 
