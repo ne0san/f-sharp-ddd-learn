@@ -1028,3 +1028,54 @@ OrderLine が変更されたとき、それが属する Order は変更された
 YES
 
 OrderLine の変更だけではなく、変更後の Order も生成しなければならない
+
+
+```fs
+let changeOrderLineQuantity = order orderLineId newPrice =
+  // orderLineIdで対象行を検索
+  let orderLine = order.OrderLines |> findOrderLine OrderLineId
+
+  // 新しい明細行を作成
+  let newOrderLine = {orderLine with Price = newPrice}
+
+  // 新しい明細を作成
+  let newOrderLines =
+    order.OrderLines |> replacceOrderLine orderLineId newOrderLine
+
+  let newOrder = {OrderLine with OrderLines = newOrderLines}
+
+  newOrder
+```
+
+あるエンティティを変えるだけでもそれを内包する高レベルのエンティティごと生成する
+
+### 集約とは
+
+エンティティのコレクションを有するエンティティ
+
+### 集約ルートとは
+
+トップレベルのエンティティ
+
+### 集約による整合性と不変条件の担保
+
+整合性の境界として機能する
+
+集約のある部分が変更されると、整合性担保のために他の箇所も変更する
+注文量を変更したらトップレベルの合計金額も変更が要る、等
+
+整合性を維持する方法を知っているコンポーネントが集約ルート
+
+
+### 集約の参照
+
+CustomerをOrderに追加しようとする
+
+この場合、Customerを変更してもOrderに変更が波及する
+↓
+OrderにCustomerの参照を格納する
+つまりCustomerIdのみを格納する
+
+CustomerとOrderは独立した集約
+↓
+集約が永続化の基本単位でもある

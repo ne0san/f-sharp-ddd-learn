@@ -12,11 +12,9 @@ type Order =
 
 let order1 =
     { OrderId = OrderId 1
-      Lines =
+      OrderLines =
         [ { OrderLineId = OrderLineId 1
             ProductId = 1
             Quantity = 2 } ] }
 
 
-let changeOrderLineQuantity = 
-// 途中
