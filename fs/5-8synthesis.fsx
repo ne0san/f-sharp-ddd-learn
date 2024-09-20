@@ -8,7 +8,7 @@ type OrderLine =
 
 type Order =
     { OrderId: OrderId
-      Lines: OrderLine list }
+      OrderLines: OrderLine list }
 
 let order1 =
     { OrderId = OrderId 1
