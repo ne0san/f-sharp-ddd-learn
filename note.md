@@ -1190,3 +1190,118 @@ type Order ={
 最低一つの明細がある制約が自動的に適用
 
 ## 6-4 ビジネスルールを型システムで表現
+
+顧客メールが検証済みと未検証が混在する時
+- 検証メールは未検証のアドレスにのみ送信すべきである
+- passリセットは検証済みメールにのみ送信すべき
+
+```fs
+type CustomerEmail = {
+    EmailAddress : EmailAddress
+    IsVerified : bool
+}
+```
+↑の状態ではいつどのような時にフラグが使用されるかが不明確
+
+検証済みと未検証を別のものとしてモデル化する
+
+```fs
+type CustomerEmail = 
+    | Unverified of EmailAddress
+    | Verified of EmailAddress
+```
+これでもVerifiedを作ろうとして未検証を渡してしまう可能性を否定できない
+
+```fs
+type CustomerEmail = 
+    | Unverified of EmailAddress
+    | Verified of VerifiedEmailAddress
+```
+さらにVerifiedEmailAddressにプライベートコンストラクタを定義
+検証サービスだけがそのコンストラクタを作成できるようにする
+
+これらのルールを型で表現することで、テストコードではなくコンパイルで検証できる
+
+パスワードリセットのWFにはVerifiedを入力として指定できる
+Unverifiedが渡される危険性がなくなる。すごい！！
+
+
+- 顧客は電子メールか郵便アドレスを持つ必要がある
+
+両方必須でも両方optionでもなく
+
+これはメールor住所or(メールand住所)という選択型で表現
+
+```fs
+type BothContactMethods = {
+    Email : EmailContactInfo
+    Address : PostalContactInfo
+}
+
+type ContactInfo =
+    | EmailOnly of EmailContactInfo
+    | AddressOnly of PostalContactInfo
+    | EmailAndAddr of BothContactMethods
+
+type CustomerInfo = {
+    Name: Name
+    ContactInfo: ContactInfo
+}
+```
+
+### 不正な状態がドメインで表現されないようにすること
+
+検証サービスではUnvalidatedを受け取り、option Validatedを返却する
+
+```fs
+type AddressValidationService =
+    UnvalidatedAddress -> ValidatedAddress option
+```
+発送先の検証が要るルールを適用するために異なる方を作成し、ValidatedOrderがValidatedAddressを含むことを要求
+
+```fs
+type UnvalidatedOrder = {
+    // 省略
+    ShippingAddress : UnvalidatedAddress
+    // 
+}
+```
+
+```fs
+type ValidatedOrder = {
+    // 
+    ShippingAddress : ValidatedAddress
+    // 
+}
+```
+
+## 6-5 整合性
+
+整合性要件について
+- 注文の合計金額は個々の行の合計と同じでなければならない
+- 注文が確定すると対応する請求書が作成され中ればならない
+- 注文時にクーポン使用時、それを再使用不能にする
+
+### 整合性とは
+
+ビジネスの用語
+直ちに合計に反映されるべきか否かは状況次第
+
+なるべく整合性を必要としない設計にしたい
+POが要求する整合性のレベルが現実的でない場合がある
+->後から整合性をとっても別に問題ない場合がある
+
+注文の内部的
+
+### 一つの集約内での整合性
+
+簡単な方法は、都度計算するようにする
+つまり変更されるたび新しいものを生成するようにする
+
+### 異なるコンテキスト間の整合性
+
+- 注文が確定すると、対応する請求書がさkぅ精されなければならない 注文あり・請求書なしはデータ矛盾
+
+請求書発行は受注ドメインではなく請求ドメインの一部
+
+課金コンテキストの
