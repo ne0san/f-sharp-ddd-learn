@@ -1371,3 +1371,85 @@ NonNegativeMoney型でモデル化できる。
 
 # 第7章 パイプラインによるWFモデリング
 
+ドメインエキスパートが見れるWFのモデリング
+
+WFが一連のサブステップで構成されている
+
+ビジネスプロセスを表すパイプラインを作成し、
+それをさらに小さな「パイプ」の週gプ体として構築
+
+パイプは一つのものだけ変換し、それらを結合して大きなパイプにする
+
+これを「変換指向プログラミング」ということがある
+
+関数型プログラミングの原則にのっとって、
+各ステップはステートレスで副作用が無いように設計
+
+## 7-1 WFの入力
+
+WFの入力は常にドメインオブジェクトでなければならない
+(入力はデシリアライズ済みとする)
+
+```fs
+type UnvalidatedOrder = {
+    OrderId : string
+    CustomerInfo : UnvalidatedCustomerInfo
+    ShippingAddress : UnvaliudatedAddress
+    // 以下略
+}
+```
+
+### 入力としてのコマンド
+WFはそれを開始するコマンドと関連する
+ある意味でWFの本当の入力はコマンドといえる
+
+このコマンドにWFがリクエストを処理する情報が含まれてなければならない
+上記のUnvalidatedOrderみたいな
+
+さらにだえrがコマンドを作成したかなどのメタデータを記録・監査したいので、
+コマンド型は↓になる
+
+```fs
+type PlaceOrder = {
+    OrderForm : UnvalidatedOrder
+    Timestamp: DateTime
+    UserId: string
+    // etc
+}
+```
+
+### ジェネリクスによる共通構造の共有
+
+コマンド情報を共通構造としたとき、共通部品をジェネリクスにして使いまわせる
+```fs
+type Command<'data> = {
+    Data : 'data
+    T
+    Timestamp: DateTime
+    UserId: string
+    // etc
+}
+// あとは↓だけでWF固有コマンドを作れる
+type PlaceOrder = Command<UnvalidatedOrder>
+```
+
+### 複数のコマンドを一つの型にまとめる
+
+単一の境界付けられたコンテキストすべてのコマンドが同じ入力で送信されることもある
+
+コンテキストでそれぞれ別のWFに紐づく
+
+対応のため、これらをすべて含む選択型を使う
+
+以下の三つのコマンドが同一の入力IFの場合
+- 注文確定
+- 注文変更
+- 注文キャンセル
+
+```fs
+type OrderTakingCommand = 
+    | Place of PlaceOrder
+    | Change of ChangeOrder
+    | Cancel of CancelOrder
+```
+
