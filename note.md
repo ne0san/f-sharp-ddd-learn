@@ -1627,3 +1627,97 @@ type AcknowledgeOrder =
     -> PricedOrder // 入力
     -> OrderAcknowledgementSent option
 ```
+
+### 返すイベントをつくる
+
+実際に返却するイベントを作るとき、複数のイベントを返却することがある
+これをイベントのリストで返却
+リストは選択型にする
+
+```fs
+type PlacedOrderEvent =
+    | OrderPlaced of OrderPlaced
+    | BillableOrderPlaced of BillableOrderPlaced
+    | AcknowledgementSent of AcknowledgementSent
+
+// WFの最終ステップでこれらのリストを返却
+type CreateEvents =
+    PricedOrder -> PlaceOrderEvent list
+```
+
+## 7-5 エフェクトの文書化
+
+全ての依存関係を再検討し、エフェクトを明示する必要があるかを再確認
+
+### 検証ステップでのエフェクト
+
+ドメイン内にないリモートなサービスの場合、
+Async と Result を持つ形にする
+
+```fs
+type AsyncResult =<'success, 'failure> = Async<Result<'success, 'failure>>
+```
+
+実装がサードパーティに依存するようであれば、それを信頼する必要がある(or その問題を回避)
+
+Async エフェクトも、それを含むコード全体に影響する
+
+```fs
+type ValidateOrder =
+    CheckProductCodeExists // 依存する関数
+    -> CheckAddressExists // 依存する関数
+    -> UnvalidatedOrder // 引数
+    -> Result<ValidatedOrder,ValidationError>
+```
+
+↓
+
+```fs
+type ValidateOrder =
+    CheckProductCodeExists // 依存する関数
+    -> CheckAddressExists // 依存する関数
+    -> UnvalidatedOrder // 引数
+    -> AsyncResult<ValidatedOrder,ValidationError list>
+```
+
+### 価格設定ステップでのエフェクト
+
+価格計算は Async にはならないけどエラーになる可能性はある
+よって Result 型になる
+
+### 各員ステップのエフェクト
+
+SendOrderAcknowledgement は I/O することが分かっているが、
+エラーになっても気にせずに成功パスに進める
+この時、Async にする
+
+## 7-6 ステップから WF を合成する
+
+```fs
+type ValidateOrder =
+    UnvalidatedOrder -> AsyncResult<ValidatedOrder, ValidationError list>
+
+type PriceOrder =
+    ValidatedOrder -> Result<PricedOrder, PricingError>
+
+type AcknowledgeOrder =
+    PricedOrder -> Async<OrderAcknowledgement option>
+
+type CreateEvents =
+    PricedOrder -> PlaceOrderEvent list
+```
+
+入出力が一致していないので合成できない
+入出力の型を調整して互換性を持たせ、関数合成する
+
+## 7-7 依存関係は設計の一部か
+
+プロセスがどう仕事をするか、どのようなシステムと連携する必要があるのか
+
+- パブリック API の依存関係は呼び出し元から隠す
+- 内部で使用される関数は依存関係を明示
+  ↓
+- WF 内部の各ステップでは依存関係を明示すべき
+- トップレベルの WF 関数の依存関係は呼び出すもとが知る必要がない
+
+
