@@ -1508,3 +1508,122 @@ type Order =
 - 起こりうる状態を全て考慮に入れて設計するようになる
 
 ### F#でシンプルなステートマシンの実装
+
+各状態に対応する独自の方を作成する。
+
+コマンドハンドラーはステートマシン全体(選択型)を引数に取り、新しいバージョンを返却する関数(更新後の選択型)
+
+ShippingCart 型(空 or アイテムあり or 支払い済みのいずれかの選択型)を引数に取る addItem 関数 -> 返却値は ShippingCart 型
+
+などなど
+
+## 7-4 型を使った WF 各ステップのモデリング
+
+### 検証ステップ
+
+依存関係は関数として扱う
+
+関数の型シグネチャは、後で実装する必要のある IF になる
+
+ex 製品コードの存在を確認するには、カタログを参照する関数
+
+ChsckProductCodeExists 型を定義できる
+
+```fs
+type CheckProductExists =
+    ProductCode -> bool
+```
+
+ex 住所を検証する関数
+
+```fs
+type CheckedAddress = CheckedAddress of UnvalidatedAddress
+type AddressValidationError = AddressValidationError of string
+type CheckAddressExists =
+    UnvalidatedAddress -> Result<CheckedAddress,AddressValidationError>
+```
+
+依存関係が整理されたところで、二つの依存関係を持つ関数として定義できる
+
+```fs
+type ValidateOrder =
+    CheckProductCodeExists // 依存する関数
+    -> CheckAddressExists // 依存する関数
+    -> UnvalidatedOrder // 引数
+    -> Result<ValidatedOrder,ValidationError> // 依存関係のどこかでResultが返されると、それを処理するトップレベルでもResultを返却する必要がある
+```
+
+### 価格計算ステップ
+
+価格計算
+
+入力は検証済み注文
+出力は計算済み注文
+依存関係はプロダクトコード確認
+
+```fs
+type GetProductProce =
+    ProductCode -> Price
+```
+
+```fs
+type PricedOrder =
+    GetProductPrice //依存関係
+    -> ValidatedOrder //入力
+    -> PricedOrder //出力
+```
+
+### 注文確認
+
+確認書のモデル
+
+```fs
+type HtmlString =
+    HtmlString of string
+```
+
+```fs
+type OrderAcknowledgement = {
+    EmailAddress : EmailAddress
+    Letter : HtmlString
+}
+```
+
+Letter の内容について
+
+```fs
+type CreateOrderAcknowledgementLetter =
+PricedOrder -> HtmlString
+```
+
+一旦具体的な実装は考えずに設計に集中
+
+確認書を送信する部分は副作用
+
+```fs
+type SendOrderAcknowledgement =
+    OrderAcknowledgement -> unit //送信されたかどうか不明
+```
+
+```fs
+type SendResult = Send | NotSend
+type SendOrderAcknowledgement =
+    OrderAcknowledgement -> SendResult
+```
+
+最終的な出力が OrderAcknowledgementSent
+
+```fs
+type = OrderAcknowledgementSent = {
+    OrderId: OrderId
+    EmailAddress :EmailAddress
+}
+```
+
+```fs
+type AcknowledgeOrder =
+    CreateOrderAcknowledgeLetter // 依存関係
+    -> SendOrderAcknowledgement //依存関係
+    -> PricedOrder // 入力
+    -> OrderAcknowledgementSent option
+```
