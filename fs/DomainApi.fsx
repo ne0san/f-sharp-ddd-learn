@@ -6,26 +6,22 @@ type AsyncResult<'success, 'failure> = Async<Result<'success, 'failure>>
 // 入力
 // ------------------
 
-type UnvalidatedOrder = {
-    OrderId : string
-    CutomerInfo: UnvalidatedCustomer
-    ShippingAddress : UnvalidatedAddress
-}
-and UnvalidatedCustomer = {
-    Name : string
-    Email : string
-}
+type UnvalidatedOrder =
+    { OrderId: string
+      CutomerInfo: UnvalidatedCustomer
+      ShippingAddress: UnvalidatedAddress }
+
+and UnvalidatedCustomer = { Name: string; Email: string }
 and UnvalidatedAddress = UnvalidatedAddress of string
 
 // ------------------
 // 入力コマンド
 // ------------------
 
-type Command<'data> = {
-    Data : 'data
-    Timestamp : DateTime
-    UserId : string
-}
+type Command<'data> =
+    { Data: 'data
+      Timestamp: DateTime
+      UserId: string }
 
 type PlaceOrderCommand = Command<UnvalidatedOrder>
 
@@ -50,6 +46,4 @@ type PlacedOrderEvent =
 
 type PlaceOrderError = PlaceOrderError of Undefined
 
-type PlaceOrderWorkflow = 
-    PlaceOrderCommand -> AsyncResult<PlacedOrderEvent list, PlaceOrderError>
-
+type PlaceOrderWorkflow = PlaceOrderCommand -> AsyncResult<PlacedOrderEvent list, PlaceOrderError>
