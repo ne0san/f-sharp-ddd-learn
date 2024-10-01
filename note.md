@@ -1803,3 +1803,122 @@ printfn "%d" (evalWith5ThenAdd2 square) // 27
 F#ではデフォルトで全ての関数がカリー化
 
 ### 部分適用
+
+カリー化された関数に一つだけ引数渡したら、そのパラメータだけ組み込まれたカリー化された関数が返却される
+
+## 8-3 全域関数
+
+数学では関数はとりうる各入力に対してそれぞれ一つの出力に結びついている
+
+この様な関数を全域関数という
+
+例えば 12 を入力値で割る関数を作るとき、
+0 が入力されたら未定義動作とかになる。
+
+0 がそもそも渡されない様にするか、option か result にするか
+
+NonZeroInteger を作成してそれを渡せる様にするなど
+
+これにより型シグネチャが嘘つかない様になる
+
+## 8-4 関数合成
+
+A -> B
+と
+B -> C を合成して
+A -> C という関数を作れる
+
+### F#での関数合成
+
+パイピング
+
+|>演算子でパイピングする
+
+```fs
+let add1 x = x + 1
+let square x = x * x
+let add1ThenSquare x = x |> add1 |> square
+printfn "%d" (add1ThenSquare 5) // 36
+```
+
+### 関数からアプリ全体を構築する
+
+低レベル処理をパイプラインで繋ぎ合わせてワークフローをつくる
+
+最後にこれら WF を入力に応じて特定の WF を選択して呼び出すコントローラ/ディスパッチャを作成することで構築できる
+
+これが関数型アプリケーションを構築する方法
+
+### 関数合成する上での課題
+
+合成したい関数同士の型が一致していない場合
+
+一般的には両サイドの最小公倍数にする
+
+つまり両者を包含する型にする
+
+`fs/8-4unmatchFunctions.fsx`
+
+# 第九章 パイプラインの合成
+
+WF は一覧のドキュメントの変換、すなわちパイプラインと考えられる
+
+```fs
+let placeOrder unvalidatedOrder =
+    unvalidatedOrder
+    |> validateOrder
+    |> priceOrder
+    |> acknowledgeOrder
+    |> createEvents
+```
+
+この WF を実装するには個々のステップを作成し、それらを組み合わせるという二段階がある
+
+パイプラインないの各ステップを独立した関数として実装する
+その際ステートレスで副作用がない様にする
+
+次にこれら小さな関数を大きな関数に合成する
+
+大体の場合は型が一致しないので各ステップの入出力の型を一致させて関数合成できる様にする
+
+## 9-1 単純型を扱う
+
+ワークフロー自体のステップを実装する前にまずは OrderId や ProductCode などの単純型を実装する
+
+各単純型ごとに二つ関数を実装する
+
+- create 関数
+- value 関数
+
+ヘルパー関数は単純型と同じファイルにおいて適用する型と同じ名前のモジュールを使用する
+
+```fs
+module Domain =
+    type orderId = private OrderId of string
+    module OrderId =
+        let create str =
+            if String.IsNullOrEmpty(str) then
+                failwith "OrderId must not be null or empty"
+            elif str.Length > 50 then
+                failwith "OrderId must not be more than 50 chars"
+            else
+                OrderId str
+        let value (OrderId str) = str
+```
+
+## 9-2 関数の型から実装を導く
+
+WF の各ステップを表す関数専用の型を定義した
+これらのコードが型定義に準拠していることを確実にするには
+
+最も簡単な手法は通常の方法で関数を定義し、後で使用するときに間違っていれば型チェックエラーが出ると信じること
+
+もしくは関数が特定の型を実素巣していることを明確にしたい場合は他のスタイルも使える
+
+関数はその型をアノテーションとして指定した値とし、関数の本体をラムダ式とする形式でも定義可能
+
+```fs
+type MuFunctionSignature = Param1 -> Param2 -> Result
+let myFunc: MuFunctionSignature =
+    fun param1 param2 ->
+```
