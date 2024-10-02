@@ -1,4 +1,50 @@
+use proc_macro::TokenStream;
+use quote::quote;
 use rust_decimal::prelude::*;
+use syn::{parse_macro_input, DeriveInput, Lit, Meta, MetaNameValue};
+
+#[proc_macro_derive(SimpleType, attributes(validate, error_msg))]
+pub fn derive_simple_type(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+    let mut validator = None;
+    let mut error_msg = None;
+
+    for attr in input.attrs {
+        if let Ok(Meta::NameValue(MetaNameValue { path, lit, .. })) = attr.parse_args() {
+            if path.is_ident("validate") {
+                if let Lit::Str(lit_str) = lit {
+                    validator = Some(lit_str.value());
+                }
+            } else if path.is_ident("error_msg") {
+                if let Lit::Str(lit_str) = lit {
+                    error_msg = Some(lit_str.value());
+                }
+            }
+        }
+    }
+
+    let validator = validator.expect("Validator function is required");
+    let error_msg = error_msg.expect("Error message is required");
+
+    let expanded = quote! {
+        impl SimpleType<String> for #name {
+            fn create(v: String) -> Result<Self, String> {
+                if (#validator)(&v) {
+                    Ok(Self(v))
+                } else {
+                    Err(#error_msg.to_string())
+                }
+            }
+
+            fn value(&self) -> &String {
+                &self.0
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
+}
 
 #[derive(Debug, Clone)]
 struct Undefined();
@@ -92,17 +138,17 @@ struct UnvalidatedAddress(String);
 #[derive(Debug, Clone)]
 struct ValidatedArress(String);
 
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+// pub fn add(left: usize, right: usize) -> usize {
+//     left + right
+// }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+//     #[test]
+//     fn it_works() {
+//         let result = add(2, 2);
+//         assert_eq!(result, 4);
+//     }
+// }
