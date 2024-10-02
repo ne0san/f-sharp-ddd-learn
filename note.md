@@ -1922,3 +1922,126 @@ type MuFunctionSignature = Param1 -> Param2 -> Result
 let myFunc: MuFunctionSignature =
     fun param1 param2 ->
 ```
+
+## 9-3 検証ステップの実装
+
+
+```fs
+type CheckAddressExists =
+    UnvalidatedAddress -> AsyncResult<CheckAddress, AddressValidationError>
+
+
+type ValidateOrder = 
+    CheckProductCodeExists
+    -> CheckAddressExists
+    ->UnvalidateOrder
+    ->AsyncResult<ValidatedOrder, ValidationError list>
+```
+ただし、本章ではエフェクトを排するのでAsuncResultを除く
+
+```fs
+type CheckAddressExists =
+    UnvalidatedAddress -> CheckAddress
+
+type ValidateOrder = 
+    CheckProductCodeExists -> CheckAddressExists -> UnvalidatedOrder ->ValidatedOrder
+
+let validateOrder : ValidateOrder = 
+    fun checkProductCodeExists checkAddressExists unvalidatedOrder ->
+        let orderId =
+            unvalidatedOrder.OrderId |> OrderId.create
+        let customerInfo =
+            unvalidatedOrder.CustomerInfo |> toCutomerInfo
+        let shippingAddress = unvalidatedOrder.ShippingAddress |> toAddress
+        {
+            OrderId = orderId
+            CustomerInfo = customerInfo
+            ShippingAddress = shippingAddress
+            //等々
+        }
+
+// まだ定義居ていないヘルパー関数を使用している
+// 検証されていない型からドメイン型を構築する
+// 
+```
+
+### 検証されたチェック済み住所の作成
+
+toAddressは少し複雑
+- 生のプリミティブ型をドメイン型オブジェクトに変換
+- 外部サービスでアドレス存在チェック
+
+
+### 明細行の作成
+
+明細行の作成
+- 一つのUnvalidatedOrderLineをValidatedOrderLineに変換
+    - これをtoValidateOrderLine
+- ↑をList.mapで全体に適用
+- ↑を用いてValidateOrder使用する
+
+toOrderQuantityについて
+```fs
+let toOrderQuantity productCode quantity =
+    match productCode with
+    | Widget _ ->
+        quantity
+        |> int
+        |> UnitQuantity.create
+        |> OrderQuantity.Unit
+    | Gizmo _ ->
+        qunatity
+        |>KillogramQuantity.create
+        |> OrderQuantity.Kilogram
+```
+
+toProductCodeについて
+```fs
+let toProductCode (checkProductCodeExists: CheckProductCodeExists) productCode =
+    productCode
+    |> ProductCode.create
+    |>checkProductCodeExists
+    // bool
+```
+パイプラインはproductCodeを返したいのだが、boolが返却されてしまう
+
+解決法は↓
+
+### 関数アダプターの作成
+
+boolを返す述語とチェックする値をパラメータtぽする実装
+
+```fs
+let convertToPassthru checkProductCodeExists productCode =
+    if checkProductCodeExists productCode then
+        productCode
+    else
+        failwith "Invalid Product Code" 
+```
+パイプラインで使えるパススルー関数に変換する汎用アダプターになった(コンパイラがジェネリクスと判断した)
+
+```fs
+let predicateToPassthru errorMsg f x =
+    // 部分適用でエラーメッセージを組み込めるようにerrorMsgを最初のパラメータにしている
+    if f x then
+        x
+    else
+        failwith errorMsg
+```
+部分適用でエラーメッセージを組み込めるようにerrorMsgを最初のパラメータにしている
+このようなパススルー関数を作るのは関数型プログラミングでは非常に一般的
+
+## 9-4 残りのステップの実装
+
+実装のスケッチをする際、`todo!()`や`failwith ""`等で実装されてないことを示すと便利
+
+### 確認ステップ実装
+
+持ち上げ
+
+Optionをlistに変換するなどができる
+
+## 9-5 パイプラインのステップを一つに合成する
+
+入力が複数ある関数とのつなぎをするために、
+あらかじめ依存関係を部分適用して関数入出力を合わせてパイプライン化する。
