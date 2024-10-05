@@ -2260,7 +2260,7 @@ Result<B,E> -> Result<C,E>になり、E が渡されたとき E を返す様な�
 // ラムダ式の例
 let bind switchFn =
     fun twoTrackInput ->
-        match twoTrackInput woth
+        match twoTrackInput with
         | Ok success -> switchFn success
         | Error failure -> Error failure
 // もっとわかりやすい例
@@ -2270,11 +2270,80 @@ let bind switchFn twoTrackInput =
     | Error failure -> Error failure
 ```
 
+```
+-------|-----------|----Ok
+Ok     | \ switchFn|
+--------|----------|----Error
+Error   ↑ここでinのErrorとSwitchFnがErrorだった時が同じパスになる
+```
+
 `fs/10-3ErrorHandle.fsx`
 
 逆に単一トラックの関数を二つのトラックの関数に変換するアダプタも便利
 これを map という
 
+- 入力は 2 トラックの関数と 2 トラックの値
+- 入力成功時、1 トラックの関数に渡す
+- 入力が失敗だった時は関数をバイパス
+
 ```fs
+let map f aResult =
+    match aResult with
+    | Ok success -> Ok (f success)
+    | Error failure -> Error failure
+```
 
 ```
+-------|----------|----Ok
+Ok     |  f       |fの結果をOkでラップする
+-----------------------Error
+Error
+```
+
+### Result 関数の整理
+
+これらアダプタ関数は同じ名前のモジュールにぶち込むのが標準的
+
+Result.fs などに入れる
+
+### 合成と型チェック
+
+「スイッチ」関数を「2 トラック」関数にへ変換することで関数の「形」をそろえることに注力
+
+あるステップの出力が次のステップの入力と一致する限り型はトラックに沿って変更できる
+
+### 共通のエラー型に変換する
+
+パイプライン内のすべての関数は同じエラー型を持つ必要がある
+->エラー型を変更して互換性を持たせる
+
+失敗トラックの値に作用する関数をつくる
+mapError という
+
+```fs
+let mapError f aResult =
+    match aResult with
+    | Ok success -> Ok success
+    | Error failure -> Error (f failure)
+```
+
+```fs
+type FunctionA = Apple -> Result<Bananas,AppleError>
+type FunctionB = Bananas -> Result<Cherries, BananaError>
+
+type FruitError =
+| AppleErrorCase of AppleError
+| BananaErrorCase of BananaError
+
+let functionA : FunctionA =
+// 省略
+
+let functionAWithFruitError input =
+    input
+    |> functionA
+    |> Result.mapError AppleErrorCase
+```
+
+## 10-4 パイプラインでの bind と map の使用
+
+`fs/10-3ErrorHandle.fsx`
