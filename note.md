@@ -1925,28 +1925,28 @@ let myFunc: MuFunctionSignature =
 
 ## 9-3 検証ステップの実装
 
-
 ```fs
 type CheckAddressExists =
     UnvalidatedAddress -> AsyncResult<CheckAddress, AddressValidationError>
 
 
-type ValidateOrder = 
+type ValidateOrder =
     CheckProductCodeExists
     -> CheckAddressExists
     ->UnvalidateOrder
     ->AsyncResult<ValidatedOrder, ValidationError list>
 ```
-ただし、本章ではエフェクトを排するのでAsuncResultを除く
+
+ただし、本章ではエフェクトを排するので AsuncResult を除く
 
 ```fs
 type CheckAddressExists =
     UnvalidatedAddress -> CheckAddress
 
-type ValidateOrder = 
+type ValidateOrder =
     CheckProductCodeExists -> CheckAddressExists -> UnvalidatedOrder ->ValidatedOrder
 
-let validateOrder : ValidateOrder = 
+let validateOrder : ValidateOrder =
     fun checkProductCodeExists checkAddressExists unvalidatedOrder ->
         let orderId =
             unvalidatedOrder.OrderId |> OrderId.create
@@ -1962,25 +1962,27 @@ let validateOrder : ValidateOrder =
 
 // まだ定義居ていないヘルパー関数を使用している
 // 検証されていない型からドメイン型を構築する
-// 
+//
 ```
 
 ### 検証されたチェック済み住所の作成
 
-toAddressは少し複雑
+toAddress は少し複雑
+
 - 生のプリミティブ型をドメイン型オブジェクトに変換
 - 外部サービスでアドレス存在チェック
-
 
 ### 明細行の作成
 
 明細行の作成
-- 一つのUnvalidatedOrderLineをValidatedOrderLineに変換
-    - これをtoValidateOrderLine
-- ↑をList.mapで全体に適用
-- ↑を用いてValidateOrder使用する
 
-toOrderQuantityについて
+- 一つの UnvalidatedOrderLine を ValidatedOrderLine に変換
+  - これを toValidateOrderLine
+- ↑ を List.map で全体に適用
+- ↑ を用いて ValidateOrder 使用する
+
+toOrderQuantity について
+
 ```fs
 let toOrderQuantity productCode quantity =
     match productCode with
@@ -1995,7 +1997,8 @@ let toOrderQuantity productCode quantity =
         |> OrderQuantity.Kilogram
 ```
 
-toProductCodeについて
+toProductCode について
+
 ```fs
 let toProductCode (checkProductCodeExists: CheckProductCodeExists) productCode =
     productCode
@@ -2003,21 +2006,23 @@ let toProductCode (checkProductCodeExists: CheckProductCodeExists) productCode =
     |>checkProductCodeExists
     // bool
 ```
-パイプラインはproductCodeを返したいのだが、boolが返却されてしまう
 
-解決法は↓
+パイプラインは productCode を返したいのだが、bool が返却されてしまう
+
+解決法は ↓
 
 ### 関数アダプターの作成
 
-boolを返す述語とチェックする値をパラメータtぽする実装
+bool を返す述語とチェックする値をパラメータ t ぽする実装
 
 ```fs
 let convertToPassthru checkProductCodeExists productCode =
     if checkProductCodeExists productCode then
         productCode
     else
-        failwith "Invalid Product Code" 
+        failwith "Invalid Product Code"
 ```
+
 パイプラインで使えるパススルー関数に変換する汎用アダプターになった(コンパイラがジェネリクスと判断した)
 
 ```fs
@@ -2028,7 +2033,8 @@ let predicateToPassthru errorMsg f x =
     else
         failwith errorMsg
 ```
-部分適用でエラーメッセージを組み込めるようにerrorMsgを最初のパラメータにしている
+
+部分適用でエラーメッセージを組み込めるように errorMsg を最初のパラメータにしている
 このようなパススルー関数を作るのは関数型プログラミングでは非常に一般的
 
 ## 9-4 残りのステップの実装
@@ -2039,7 +2045,7 @@ let predicateToPassthru errorMsg f x =
 
 持ち上げ
 
-Optionをlistに変換するなどができる
+Option を list に変換するなどができる
 
 ## 9-5 パイプラインのステップを一つに合成する
 
@@ -2062,52 +2068,56 @@ Optionをlistに変換するなどができる
 
 ```fs
 let toAddress checkAddressExists unvalidatedAddress =
-// 
+//
 let toProductCode checkProductCodeExists productCode =
 //
 ```
-↑はどちらも依存関係が明示的
 
-toValidatedOrderLineはtoProductCodeを使うので、
-toValidateOrderLineもcheckProductCodeExistsもパラメータが必要
+↑ はどちらも依存関係が明示的
 
-さらに一つ上のレベルのvalidateOrder関数はtoAddressとtoValidateOrderLineを両方使うので、
+toValidatedOrderLine は toProductCode を使うので、
+toValidateOrderLine も checkProductCodeExists もパラメータが必要
+
+さらに一つ上のレベルの validateOrder 関数は toAddress と toValidateOrderLine を両方使うので、
 それらに必要なサービスを両方とも追加パラメータとして渡す
 
-↑をトップレベルまで繰り返す
+↑ をトップレベルまで繰り返す
 このトップレベルをオブジェクト指向ではコンポジションルートという
 
-WF関数であるplaceOrderをコンポジションルートにするべきか->否
+WF 関数である placeOrder をコンポジションルートにするべきか->否
 サービスをセットアップするには一般的に構成情報へのアクセスが必要になるから
 
-placeOrderワークフロー自体も必要なサービスをパラメータとしていけとれるようにした方が良い
+placeOrder ワークフロー自体も必要なサービスをパラメータとしていけとれるようにした方が良い
 
 すべての依存関係を差し替えられるので簡単にテストできるという利点がある
 
 ### コンポジションルートをどこにすべきか?
 
 実際はアプリケーションのエントリーポイントに近いものにするべき
-- main関数
-- webとかならOnStartup/Application_Startハンドラー
+
+- main 関数
+- web とかなら OnStartup/Application_Start ハンドラー
 
 ### 依存関係が多すぎる場合
 
 -> 関数が行うことが多すぎることを疑う
-    もっと小さな単位に分割できないか
-    難しい場合は依存関係を一つのレコードにまとめることで、見た目上小さくできる
+もっと小さな単位に分割できないか
+難しい場合は依存関係を一つのレコードにまとめることで、見た目上小さくできる
 
 子関数の依存関係が複雑な場合
 
 アドレスチェックで、エンドポイント情報と認証情報が必要とする
+
 ```fs
 let chechAddressExists endPoint Credentials =
 ```
-この上の階層すべてでendPointとCredentialsを渡すのか??checkAddressExistsしか使わないのに??
+
+この上の階層すべてで endPoint と Credentials を渡すのか??checkAddressExists しか使わないのに??
 ↓
 否
 ↓
-- 低レベル関数をトップレベル関数の外側で設定し、依存が組み込まれたcheckAddressExistsを注入する
 
+- 低レベル関数をトップレベル関数の外側で設定し、依存が組み込まれた checkAddressExists を注入する
 
 ## 9-7 依存関係のテスト
 
@@ -2115,5 +2125,156 @@ let chechAddressExists endPoint Credentials =
 
 モックライブラリが無くてもフェイク関数を用意するだけで依存関係を提供できる
 
-checkProductCodeExistsの成否で検証全体の成否が変わるテストをしたい
+checkProductCodeExists の成否で検証全体の成否が変わるテストをしたい
 
+```fs
+open NUnit.Framework
+
+[<Test>]
+let ``正常系_製品存在時、検証成功``() =
+    let checkAddress address =
+        CheckAddress address
+    let CheckProductCodeExists productCode =
+        true
+        // スタブを簡単に定義できちゃうぞ♡
+```
+
+サービスの障害で例外が投げられる様にしたが、これは避けたい
+
+関数型プログラミングの原理をテストに使うことで実用的なメリットが得られる
+
+- ステートレスで純粋関数
+- 依存関係が明示的
+- 副作用は関数自体ではなくパラメータで渡される関数でカプセル化される
+
+## 9-8 組み立てられたパイプライン
+
+1. 特定の WF を実装する全てのコードを同じモジュールにぶち込む。モジュール名を WF に基づく名前にする
+2. ファイルの一番上に型定義を打ち込む
+3. その下に各ステップの実装
+4. その下に各ステップを組み立て、メインの WF 関数を作る
+
+WF のパブリックな型は API モジュールなどん別の場所で定義されるので、内部ステージを表現する型だけでいい
+パブリックなやつはモジュール序盤で open するなどしておく
+
+## 9-9 まとめ
+
+ドキュメント観点では例外を扱うのは最悪
+次回で result に戻して色々やってみる
+
+# 第 10 書 エラーの扱い
+
+製品コードの形式が違っていたりなどのエラーについて
+Result 型を使う
+
+## 10-1 Result 型を使ってエラーを明示する
+
+関数型ではできるだけ物事を明示的にすることを重視している
+
+エラーも同様
+
+関数の型シグネチャについて、エラーがない様に見えてうんこ
+
+望ましいのは全域関数で起こりうる全ての結果が返り値として明示的に文書化されていることが望ましい
+
+```fs
+type CheckAddressExists =
+    UnvalidatedAddress -> CheckedAddress
+```
+
+↓
+
+```fs
+type CheckAddressExisits =
+    UnvalidatedAddress -> Result<CheckedAddress, AddressValidationError>
+and AddressValidationError =
+    | InvalidFormat of string
+    | AddressNotFound of string
+```
+
+## 10-2 ドメインエラーを扱う
+
+この様な型でも全てのエラーの処理はできないし望ましくもない
+
+エラーを分類して処理する一貫的アプローチを検討
+
+- ドメインエラー
+  - ビジネスプロセスとして予想されるエラー。ドメイン設計に含まれる場合がある
+- パニック
+  - 処理不可能エラー　ゼロ除算、メモリ不足など
+- インフラエラー
+  - ネットワークタイムアウトや認証失敗など アーキに含まれるがビジネスプロセスではない
+
+ドメインエラーなのかそうではないのかはっきりしない場合はドメインエキスパートに聞く
+
+エラーの種類ごとに異なる実装が必要
+
+ドメインエラーはドメインエキスパートと議論して型システムで文書化されるべき
+パニックは WF を放棄し例外を発生させる main などで捕捉する
+インフラストラクチャエラーは状況によってどちらでも適切
+マイクロサービスなら例外でいいが、モノリシックならエラー処理を明示したほうがいいかも
+
+    ドメインエラーと同じ様に扱うことでドメインエキスパートに対応を相談せざるを得なくなるかもしれない
+
+### 型によるドメインエラーのモデリング
+
+ドメインをモデリングする場合はドメインの型で作成した
+エラーも同様
+
+エラーについて選択型を用意し、対応が必要なエラーの種類ごとに個別ケースを用意する
+
+```fs
+type PlaceorderError =
+    | ValidationError of string
+    | ProductOutStock of ProductCode
+    | RemoteServerError of RemoteServerError
+```
+
+選択型で列挙することで、どんなエラーが起こりうるかが明示的になる
+変更も容易で、安全
+
+一般的にはアプリケーションの開発する上でエラーケースが浮かび、それをど名ネラーとして扱うかを決定することになる
+
+### エラー処理はコードの見た目を悪くする
+
+いちいちパターンマッチが必要になるので、見た目が悪い
+
+## 10-3 Result を生成する関数の連鎖
+
+A -> Result<B,E>
+この次の関数のシグネチャは
+B -> Result<C,E>
+
+鉄道にちなんで「スイッチ関数」もしくは一般的に「モナディック関数」と呼ぶこともある
+
+### アダプターブロックの実装
+
+簡単で
+す！！！！！！！
+
+B -> Result<C,E>の関数が
+Result<B,E> -> Result<C,E>になり、E が渡されたとき E を返す様なアダプタを実装する
+これを bind という
+
+```fs
+// ラムダ式の例
+let bind switchFn =
+    fun twoTrackInput ->
+        match twoTrackInput woth
+        | Ok success -> switchFn success
+        | Error failure -> Error failure
+// もっとわかりやすい例
+let bind switchFn twoTrackInput =
+    match twoTrackInput with
+    | Ok success -> switchFn success
+    | Error failure -> Error failure
+```
+
+`fs/10-3ErrorHandle.fsx`
+
+逆に単一トラックの関数を二つのトラックの関数に変換するアダプタも便利
+これを map という
+
+```fs
+
+```
