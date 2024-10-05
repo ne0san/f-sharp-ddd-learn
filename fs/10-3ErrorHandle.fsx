@@ -18,7 +18,7 @@ module Result =
 
     // ResultがErrorであるとき、別のError型に変換する
     // ->引数がOkであった場合、中身をOkで再ラップして返却
-    // ->引数がErrorであった場合、中身をfに渡し、結果をErrorでラップして返却 この時のfは別のError型用のコンストラクタ
+    // ->引数がErrorであった場合、中身をfに渡し、結果をErrorでラップして返却 この時のerrorConstructorは別のError用型のコンストラクタ
     let mapError errorConstructor aResult =
         match aResult with
         | Ok success -> Ok success

@@ -1,8 +1,5 @@
 {
-  "rust-analyzer.linkedProjects": [
-    "./rs/domain-modeling-trial/Cargo.toml",
-    "./rs/domain-modeling-trial/domain-model/Cargo.toml"
-  ],
+  "rust-analyzer.linkedProjects": ["./rs/Cargo.toml"],
   "[rust]": {
     "editor.defaultFormatter": "rust-lang.rust-analyzer",
     "editor.formatOnSave": true,
