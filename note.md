@@ -2346,4 +2346,5 @@ let functionAWithFruitError input =
 
 ## 10-4 パイプラインでの bind と map の使用
 
+↓ このファイル見ればすべてわかる。
 `fs/10-3ErrorHandle.fsx`
