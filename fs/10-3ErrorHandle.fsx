@@ -145,6 +145,7 @@ printfn "----"
 let doNoting _n = ()
 
 let logError msg = printfn "Error: %A" msg
+let logInfo msg = printfn "Info: %A" msg
 
 // OKのとき、unitを返す関数に渡す、という変換
 let adaptDeadEnd f = Result.tee f |> Result.map
@@ -157,6 +158,7 @@ printfn "----"
 
 logErrorPiped (Ok(ValidatedAddress(Address "123 Main St")))
 printfn "----"
-let checkAddressRAndErrorLog = checkAddressExistsR >> Result.tee logError
+let logInfoPiped = Result.tee logInfo
+let checkAddressRAndErrorLog = checkAddressExistsR >> logInfoPiped
 checkAddressRAndErrorLog (UnvalidatedAddress(Address "123 Main St"))
 checkAddressRAndErrorLog (UnvalidatedAddress(Address "123 Sub St"))
