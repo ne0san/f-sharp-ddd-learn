@@ -2418,8 +2418,53 @@ let tee f x =
 
 これまでは単純なエラー処理を扱った
 
-実際は条件分岐やループと組み合わせたり、深く寝すとする Result を扱う場合があるかも
+Result を生成する関数を bind で連鎖して、2 トラックモデルにした。
+
+実際は条件分岐やループと組み合わせたり、深掘りネストする Result を扱う場合があるかも
 
 こういう場合「コンピュテーション式」という形で救済措置がある
 
 bind の煩わしい部分を裏に隠せる
+
+### コンピュテーション式とは
+
+特別な形の式ブロック
+
+Result ように result というコンピュテーション式を作ってみる
+必要なのは ↓ の二つ
+
+- bind
+- return
+
+実装は省略
+Result.fs みて
+
+2 トラックの場合
+
+```fs
+let placeOrder unvalidatedOrder =
+    validateOrderAdapted
+    >> Result.bind priceOrderAdapted
+    >> Result.map acknowledgeOrder
+    >> Result.map createEvents
+```
+
+コンピュテーション式の場合、validateOrder や priceOrder の出力が Result でないかのように扱える
+
+```fs
+let placeOrder unvalidatedOrder =
+    result {
+        let! validatedOrder = validateOrder unvalidatedOrder |> Result.mapError PlaceOrderError.Validation
+        let! pricedOrder = priceOrder validatedOrder |> Result.mapError PlaceOrderError.Pricing
+        let acknowledgementOption = acknowledgeOrder pricedOrder
+        let events = createEvents pricedOrder acknowledgementOption
+        return events
+    }
+```
+
+- result というコンピュテーション式は result で始まり、ブロックになる
+- `let!`は結果を自動的にアンラップしている
+- エラー型は全体で一致する必要があるので、Result.mapError で共通型にする
+- return でブロック全体の値を示す
+
+Result がないように見える
