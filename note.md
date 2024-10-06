@@ -2348,3 +2348,78 @@ let functionAWithFruitError input =
 
 ↓ このファイル見ればすべてわかる。
 `fs/10-3ErrorHandle.fsx`
+
+## 10-5 他の種類の関数を 2 トラックモデルに適合させる
+
+これまで 1 トラックとスイッチというふたつの関数型を見た。
+それ以外のパターン
+
+- 例外を投げる関数
+- 何も返さない行き止まり関数
+
+### 例外の処理
+
+我々の管理外のライブラリとかサービスで例外が起きたら
+
+トップレベル以外では補足の必要はないが、ドメインの一部として扱いたい場合
+
+例外を返す関数を、Result に変換するアダプターをつくる
+
+```fs
+// エラーを起こしたサービスを追跡
+type ServiceInfo = {
+    Name : string
+    Endpoint: Uri
+}
+
+type RemoteServiceError = {
+    Service : ServiceInfo
+    Exception : System.Exception
+}
+```
+
+サービス情報をもとのサービス関数をアダプターブロックに渡す
+
+全てをキャッチする必要はなく、ドメインに関するものだけキャッチする
+
+```fs
+let serviceExceptionAdaptor serviceInfo serviceFn x =
+    try
+        Ok (serviceFn x)
+    with
+    |:? TimeoutException as ex ->
+        Error {Service=serviceInfo; Exception:ex}
+    |:? AuthorizationException as ex ->
+        Error {Service=serviceInfo; Exception:ex}
+```
+
+`fs/10-5ExceptionHandle.fsx`
+
+### 行き止まり関数の処理
+
+出力がない関数
+
+この関数はほとんど IO がある
+これを 2 トラックモデルで動作させるには別のアダプタブロックが要る
+
+いわゆるパススルー的な
+
+これを Tee という
+
+```fs
+let doNoting _n =
+    ()
+let tee f x =
+    f x
+    x
+```
+
+## 10-6 コンピュテーション式
+
+これまでは単純なエラー処理を扱った
+
+実際は条件分岐やループと組み合わせたり、深く寝すとする Result を扱う場合があるかも
+
+こういう場合「コンピュテーション式」という形で救済措置がある
+
+bind の煩わしい部分を裏に隠せる

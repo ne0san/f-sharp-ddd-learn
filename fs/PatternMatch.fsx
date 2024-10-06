@@ -1,19 +1,16 @@
 type Apple = Apple of string
-let app = Apple "Apple"
-
-let str = app |> fun (Apple a) -> a
-let (Apple str2) = app
-
-let str3 =
-    match app with
-    | Apple a -> a
-
 
 type Person =
     { Name: string
       Age: int
       Weight: float
       Height: float }
+
+let app = Apple "Apple"
+
+let (Apple str) = app
+
+printfn "%s" str
 
 let person =
     { Name = "Alice"

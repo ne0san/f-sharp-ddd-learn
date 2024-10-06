@@ -1,5 +1,14 @@
+open System
+
+type ServiceInfo = { Name: string; Endpoint: Uri }
+
+type RemoteServiceError =
+    { Service: ServiceInfo
+      Exception: Exception }
+
 // Resultを取り扱う関数群
 module Result =
+
     // A -> Result<T,E> である関数を Result<A,E> -> Result<T,E> に変換する
     // ->引数がOkであった場合、中身をfに渡し、結果をそのまま返却
     // ->引数がErrorであった場合、そのErrorをそのまま返却
@@ -24,6 +33,27 @@ module Result =
         | Ok success -> Ok success
         | Error failure -> Error(errorConstructor failure)
 
+    // ドメインとしてキャッチする必要がある例外をResultに変換する
+    let serviceExceptionAdaptor serviceInfo serviceFn x =
+        try
+            Ok(serviceFn x)
+        with // ここのケースはドメインとして取り扱う例外のみをキャッチする
+        | :? TimeoutException as ex ->
+            Error
+                { Service = serviceInfo
+                  Exception = ex }
+        | :? Exception as ex ->
+            Error
+                { Service = serviceInfo
+                  Exception = ex }
+
+    // なにも返却しない関数をつなぐために変換する
+    let tee f x =
+        f x
+        x
+// --------------------------------------------
+// 各ステップの合成
+// --------------------------------------------
 // 単純型定義
 type Apple = Apple of string
 type Bananas = Bananas of string
@@ -80,3 +110,53 @@ let functionABC =
 printfn "%A" (functionABC (Apple "Banana"))
 printfn "%A" (functionABC (Apple "Apple"))
 printfn "%A" (functionABC (Apple "d"))
+printfn "----"
+
+
+
+// --------------------------------------------
+// 例外をResultに変換
+// --------------------------------------------
+type Address = Address of string
+type UnvalidatedAddress = UnvalidatedAddress of Address
+type ValidatedAddress = ValidatedAddress of Address
+
+let serviceInfo =
+    { Name = "Service"
+      Endpoint = Uri("http://localhost") }
+
+let checkAddressExists (UnvalidatedAddress address) =
+    if address = Address "123 Main St" then
+        ValidatedAddress address
+    else
+        failwith "Address not found"
+
+let checkAddressExistsR address =
+    Result.serviceExceptionAdaptor serviceInfo checkAddressExists address
+
+
+printfn "%A" (checkAddressExistsR (UnvalidatedAddress(Address "123 Main St")))
+printfn "%A" (checkAddressExistsR (UnvalidatedAddress(Address "123 Sub St")))
+printfn "----"
+
+// --------------------------------------------
+// 何も返さない関数を変換
+// --------------------------------------------
+let doNoting _n = ()
+
+let logError msg = printfn "Error: %A" msg
+
+// OKのとき、unitを返す関数に渡す、という変換
+let adaptDeadEnd f = Result.tee f |> Result.map
+let logErrorPiped = adaptDeadEnd logError
+let checkAddressRAndErrorLogOnlyOk = checkAddressExistsR >> logErrorPiped
+
+checkAddressRAndErrorLogOnlyOk (UnvalidatedAddress(Address "123 Main St"))
+checkAddressRAndErrorLogOnlyOk (UnvalidatedAddress(Address "123 Sub St")) // 何も出力されない Errorの時にはlogErrorには渡されない
+printfn "----"
+
+logErrorPiped (Ok(ValidatedAddress(Address "123 Main St")))
+printfn "----"
+let checkAddressRAndErrorLog = checkAddressExistsR >> Result.tee logError
+checkAddressRAndErrorLog (UnvalidatedAddress(Address "123 Main St"))
+checkAddressRAndErrorLog (UnvalidatedAddress(Address "123 Sub St"))

@@ -17,14 +17,14 @@ fn main() {
         name: "Alice".to_string(),
         age: 30,
         weight: 60.0,
-        height: 1.6,
+        height: 160.0,
     };
 
     let Person {
         name,
         age,
-        weight: weighting,
-        ..
+        weight: weighting, //別名をつける
+        ..  //ほかのフィールドを無視する
     } = person;
     println!("Name: {}, Age: {}, Weight: {}", name, age, weighting);
 }
