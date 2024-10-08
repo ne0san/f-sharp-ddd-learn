@@ -2468,3 +2468,24 @@ let placeOrder unvalidatedOrder =
 - return でブロック全体の値を示す
 
 Result がないように見える
+
+### コンピュテーション式の合成
+
+validateOrder と priceOrder が result コンピュテーション式で定義されているとする
+
+大きな Result 式で扱える
+これを placeOrder で使用できる
+
+placeOrder はさらに大きな result 式で使える
+
+### Result で注文を検証する
+
+result コンピュテーション式を使って、エラー処理ロジックを隠す
+
+ただし各 Result の型は合わせる必要がある
+
+### Result のリストを扱う
+
+toValidateOrderLine を list.map で各行に対して適用していたが、
+これが Result になると Result のリストになってしまう
+なので、Result のリストではなくリストの Result が必要
