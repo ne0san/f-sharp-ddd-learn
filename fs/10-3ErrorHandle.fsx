@@ -162,3 +162,24 @@ let logInfoPiped = Result.tee logInfo
 let checkAddressRAndErrorLog = checkAddressExistsR >> logInfoPiped
 checkAddressRAndErrorLog (UnvalidatedAddress(Address "123 Main St"))
 checkAddressRAndErrorLog (UnvalidatedAddress(Address "123 Sub St"))
+printfn "----"
+
+type ResultBuilder() =
+    member this.Return(x) = Ok x
+    member this.Bind(x, f) = Result.bind f x
+
+let result = ResultBuilder()
+
+
+let applebanana = Apple "App"
+
+let resultABC apple =
+    result {
+        let! a = functionAWithFruitError apple
+        let! b = functionBWithFruitError a
+        let c = functionC b
+        return c
+    }
+
+
+printfn "%A" (resultABC applebanana)

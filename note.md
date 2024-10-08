@@ -2484,8 +2484,27 @@ result コンピュテーション式を使って、エラー処理ロジック�
 
 ただし各 Result の型は合わせる必要がある
 
+```fs
+type ResultBuilder() =
+    member this.Return(x) = Ok x
+    member this.Bind(x,f) = Result.bind f x
+let result = ResultBuilder
+```
+
 ### Result のリストを扱う
 
 toValidateOrderLine を list.map で各行に対して適用していたが、
 これが Result になると Result のリストになってしまう
 なので、Result のリストではなくリストの Result が必要
+
+list をループし、一つでも失敗したら全体が Error になり、すべて成功なら成功値リストになる
+
+#### 実装時のコツ
+
+F#ではリストがリンクリスト
+
+一つのアイテムを含む Result を、アイテムのリストを含む Result に前置する
+
+関数型プログラミングでは、cons 演算子としても知られる
+
+prepend アクションの新しいバージョンが必要
