@@ -6,6 +6,13 @@ type RemoteServiceError =
     { Service: ServiceInfo
       Exception: Exception }
 
+let prepend firstR restR =
+    match firstR, restR with
+    | Ok first, Ok rest -> Ok(first :: rest)
+    | Error err1, Ok _ -> Error err1
+    | Ok _, Error err2 -> Error err2
+    | Error err1, Error _ -> Error err1
+
 // Resultを取り扱う関数群
 module Result =
 
@@ -46,6 +53,11 @@ module Result =
             Error
                 { Service = serviceInfo
                   Exception = ex }
+
+    let sequence aListOfResults =
+        let initialValue = Ok []
+        List.foldBack prepend aListOfResults initialValue
+
 
     // なにも返却しない関数をつなぐために変換する
     let tee f x =
