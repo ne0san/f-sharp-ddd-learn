@@ -2579,3 +2579,187 @@ Unit("ABC") == Task.FromResult("ABC")
 // 戻り値は元と同じ「構造や性質」の中に入る
 
 ```
+
+### アプリカティブを使って並列に合成する
+
+モナディックな値を並列に組み合わせることが可能
+検証の必要があれば、最初のエラーだけを残すだけでなく、
+すべてのエラーを結合するためにアプリカティブなアプローチを使うことになる
+
+詳しくは解説がない
+
+[fsharpforfunandprofit.com]
+
+## 10-8 非同期エフェクトの追加
+
+当初の設計ではエラーエフェクトだけではなく、非同期エフェクトもある
+
+AsyncResult 型に合わせて asyncResult コンピュテーション式を定義
+
+使い方はほぼ同じ
+
+```fs
+let validateOrder: ValidateOrder =
+    fun checkProductCode Exists checkAddressExists unvalidatedOrder ->
+        asyncResult {
+            let! orderId =
+                unvalidatedOrder.OrderId
+                |> OrderId.create
+                |> Result.mapError ValidationError
+                |> AsyncResult.ofResult // ResultをAsyncResultにする
+            let! customerInfo =
+                unvalidatedOrder.CustomerInfo
+                |> toCustomerInfo
+                |> AsyncResult.ofResult
+            let! checkedShippingAddress =
+                unvalidatedOrder.ShippingAddress
+                |> toCheckedAddress checkAddressExists
+            let! shippingAddress =
+                checkedShippingAddress
+                |> toAddress
+                |> AsyncResult.ofResult
+            let! billingAddress = // 省略
+            let! lines =
+            ///// みたいな感じ
+        }
+```
+
+result 式を asyncResult に置き換え&全ての要素を AsyncResult にする
+
+住所の検証を二つに分けた
+エフェクトをすべて元に戻すと CheckAddresExisits が AsyncResult を返すため
+
+エラー型が不適切
+結果を処理するための toCheckedAddress 関数を作成、サービス固有のエラーをドメインのエラーにマッピング
+
+## 10-9 まとめ
+
+エラー処理や非同期エフェクトに対する型安全なアプローチを取り入れたパイプラインの改訂版実装が完了
+
+この手間をかけることでパイプラインコンポーネントが問題なく動作するという信頼が得られる
+
+これからはドメインと外界とのインタラクションの実装に取り組む
+
+データのシリアライズ/デシリアライズや、状態を DB に永続化するなど
+
+# 第 11 章 シリアライズ
+
+入力をコマンド、出力をイベントとして扱うが、コマンドはどこから来て、イベントはどこへ行く?
+->境界付けられたコンテキストの外のインフラストラクチャ
+-> メッセージキューや Web リクエスト等
+
+ここら辺のインフラは固有のドメインを理解していないので、ドメインモデルの型をインフラが理解できる形式(json,xml,protobuf 等)に変換
+
+外部のインフラストラクチャと連携する際に重要な側面の一つがドメインモデルの型をシリアライズ・デシリアライズが容易なものに変換する能力
+
+シリアライズ可能な型を設計し、ドメインオブジェクトをこれら中間型との間で変換する方法
+
+## 11-1 永続化とシリアライズ
+
+永続化
+->作成元のプロセスよりも長く続く状態を意味する
+
+シリアライズ
+->ドメイン固有の表現から別の永続化が容易な表現に変換するプロセス
+
+## 11-2 シリアライズのための設計
+
+ドメインオブジェクトは複雑で深くネストされているので、シリアライザはうまくあつかえない
+ドメインオブジェクトをシリアライズ専用の型(DTO)に変換、その DTO をシリアライズ
+
+デシリアライズはその逆
+
+デシリアライズはできるだけクリーンであることが望ましい
+->DTO へのデシリアライズは基礎のデータが壊れてなければ常に成功されるべき
+->ドメイン固有の検証は、DTO からドメインオブジェクトの変換で行われるべき
+
+## 11-3 シリアライズコードとワークフローの連携
+
+シリアライズプロセスは WF とパイプラインにもう一つコンポーネントを追加するだけ
+
+デシリアライズ->ワークフロー->シリアライズ
+
+```fs
+type MyInputType = //...
+type MyOutputType = //...
+
+type Workflow = MyInputType -> MyOutputType
+
+type JsonString = string
+type MyInputDto = //...
+
+type DeserializeInputDto = JsonString -> MyInputDto
+type InputDtoToDomain = MyInputDto -> MyInputType
+
+type MyOutputDto = //...
+
+type OutputDtoFromDomain = MyOutputType -> MyOutputDto
+type SerializeOutputDto = MyOutputDto -> JsonString
+```
+
+インフラに公開されるのは最終的な
+デシリアライズ->ドメインオブジェクト変換->WF->DTO 変換->シリアライズ
+というパイプライン
+実際はエラーや非同期などの処理も必要
+
+### 境界付けられたコンテキス間の契約としての DTO
+
+WF が受け取るコマンドは、ほかの境界付けられたコンテキストの出力によって trigger
+WF が発するイベントは他のコンテキストの入力
+
+これらのイベントとコマンドでこちらの境界付けられたコンテキストが従うべき契約の形が決まる
+イベントやシリアライズされたフォーマットである DTO を変更するときは慎重に
+つまりフォーマットは完全にコントロールすべきであり、ライブラリ任せは NG
+
+## 11-4 シリアライズの全体例
+
+ドメインオブジェクトを Json にしたり json からデシリアライズする例
+
+```fs
+module Domain =
+    // こいつらに直接シリアライズできない
+    type String50 = String50 of string
+    type Birthdate = Birthdate of DateTime
+
+    type Person = {
+        First: String50
+        Last: String50
+        Birthdate: Birthdate
+    }
+    // 対応するDTO型を作成し、すべてのフィールドがプリミティブになるようにする
+module Dto =
+    type Person = {
+        First: string
+        Last: string
+        Birthdate: DateTime
+    }
+
+module Person =
+    let fromDomain (person:Domain.Person) :Dto.Person =
+        let first = person.First |> String50.value
+        let last = person.Last |> String50.value
+        let birthdate = person.Birthdate |> Birthdate.value
+        {First = first; Last = last; Birthdate = birthdate}
+    // 実装
+    let toDomain (person:Dto.Person): Result<Domain.Person, string> =
+        result {
+            let! first = dto.First |> String50.create "First"
+            //String50.createは、エラーメッセージ作成のためstringをパラメータに持つ
+            let! last = dto.Last |> String50.create "Last"
+            let! birthdate = dto.Birthdate |> Birthdate.create
+            return {First = first; Last = last; Birthdate = birthdate}
+        }
+    // 実装
+```
+
+エラー処理のため result コンピュテーション式を使う
+
+### Json シリアライザーのマッピング
+
+サードパーティライブラリを使うのが楽
+
+API は関数型に親和性があるとは限らないので、Result にラップするかも
+
+```fs
+//次はココカラやる
+```
