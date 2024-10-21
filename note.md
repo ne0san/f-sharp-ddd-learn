@@ -2761,5 +2761,86 @@ module Person =
 API は関数型に親和性があるとは限らないので、Result にラップするかも
 
 ```fs
-//次はココカラやる
+// jsonモジュール内でラップ
+module Json =
+    open Newtonsoft.Json
+    let serialize obj =
+        JsonConvert.SerializeObject obj
+    let deserialize<'a> str =
+        try
+            JsonConvert.DeserializeObject<'a> str
+            |> Result.Ok
+        with
+        | ex -> Result.Error ex
 ```
+
+### シリアライズパイプラインの全体
+
+DTO からドメインへの変換とシリアライズ関数を使うことで、ドメイン型の Person レコードを JSON 文字列に変換可能
+
+`fs/11-4serialize.fsx`参照
+
+シリアライズは result なしのため簡単だが、デシリアライズの場合は共通のエラーに変換するようにする
+
+result 式で隠ぺいする
+
+実際のアプリケーションではメッセージをログに記録したうえで呼び出し元にエラーを返すこともできる
+アポリカティブでエラーを並列に合成する
+
+エラー処理せずに、パニックにする手もある
+パイプラインがどう処理したいか次第
+
+### ほかのシリアライザーとの連携
+
+PersonDto 型に属性を追加する必要があるかもしれない
+
+シリアライズ型をドメインから分離することで、ドメイン型が汚染されることを防ぐ(変な属性とか)
+
+### 複数バージョンのシリアライズ型を使う
+
+DTO は境界付けられたコンテキスト間の契約として機能する
+
+つまり複数バージョンの DTO をサポートする必要があるかもしれない
+
+## 11-5 ドメイン型を DTO に変換する方法
+
+ドメイン型は複雑
+DTO 型はプリミティブ型のみの単純構造である必要がある
+複数のドメイン型が与えられたとき、DTO はどうすべきか
+
+### 単一ケース共用体
+
+```fs
+type ProductCode = ProductCode of string
+```
+
+この場合、対応する型は単なる string 型
+
+### オプション型
+
+None が null
+null 許容にする
+
+### レコード型
+
+```fs
+/// ドメイン型
+type OrderLienId = OrderLineId of int
+type OrderLineQty = OrderLineQty of int
+type OrderLien = {
+    OrderLineId : OrderLineId
+    ProductCode : ProductCode
+    Quantity : OrderLineQty option
+    Description : string option
+}
+
+/// 対応するDTO型
+type OrderLineDto = {
+    OrderLineId : int
+    ProductCode : string
+    Quantity : Nullable<int>
+    Description : string
+}
+```
+
+### コレクション
