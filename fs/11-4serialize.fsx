@@ -43,37 +43,48 @@ let result = ResultBuilder()
 
 module Domain =
     // こいつらに直接シリアライズできない
-    type String50 = String50 of string
-    type Birthdate = Birthdate of DateTime
+    type String50 = private String50 of string
+    module String50 =
+        let create (fieldName: string) (str: string) =
+            if String.IsNullOrEmpty(str) then
+                Result.Error $"{fieldName} must not be null or empty"
+            elif str.Length > 50 then
+                Result.Error $"{fieldName} must not be more than 50 chars"
+            else
+                Result.Ok(String50 str)
+
+        let value (String50 str) = str
+
+
+    type Birthdate = private Birthdate of DateTime
+    module Birthdate =
+        let create (date: DateTime) =
+            if date > DateTime.Now then
+                Result.Error "Birthdate must not be in the future"
+            else
+                Result.Ok(Birthdate date)
+
+        let value (Birthdate date) = date
+
+
 
     type Person =
         { First: String50
           Last: String50
           Birthdate: Birthdate }
 
-module String50 =
-    open Domain
-
-    let create (fieldName: string) (str: string) =
-        if String.IsNullOrEmpty(str) then
-            Result.Error $"{fieldName} must not be null or empty"
-        elif str.Length > 50 then
-            Result.Error $"{fieldName} must not be more than 50 chars"
-        else
-            Result.Ok(String50 str)
-
-    let value (String50 str) = str
-
-module Birthdate =
-    open Domain
-
-    let create (date: DateTime) =
-        if date > DateTime.Now then
-            Result.Error "Birthdate must not be in the future"
-        else
-            Result.Ok(Birthdate date)
-
-    let value (Birthdate date) = date
+    /// 動作確認用
+    let createPerson first last birthdate =
+        result {
+            let! first = String50.create "First" first
+            let! last = String50.create "Last" last
+            let! birthdate = Birthdate.create birthdate
+            return {
+                First = first
+                Last = last
+                Birthdate = birthdate
+            }
+        }
 
 
 /////////////////////////////////////////////
@@ -88,9 +99,9 @@ module Dto =
 
     module Person =
         let fromDomain (person: Domain.Person) : Person =
-            let first = person.First |> String50.value
-            let last = person.Last |> String50.value
-            let birthdate = person.Birthdate |> Birthdate.value
+            let first = person.First |> Domain.String50.value
+            let last = person.Last |> Domain.String50.value
+            let birthdate = person.Birthdate |> Domain.Birthdate.value
 
             { First = first
               Last = last
@@ -98,10 +109,10 @@ module Dto =
 
         let toDomain (person: Person) : Result<Domain.Person, string> =
             result {
-                let! first = person.First |> String50.create "First"
+                let! first = person.First |> Domain.String50.create "First"
                 //String50.createは、エラーメッセージ作成のためstringをパラメータに持つ
-                let! last = person.Last |> String50.create "Last"
-                let! birthdate = person.Birthdate |> Birthdate.create
+                let! last = person.Last |> Domain.String50.create "Last"
+                let! birthdate = person.Birthdate |> Domain.Birthdate.create
 
                 return
                     { First = first
@@ -127,12 +138,9 @@ let jsonFromDomain = Dto.Person.fromDomain >> Json.serialize
 
 open Domain
 
-let person =
-    { First = String50 "Alice"
-      Last = String50 "Adams"
-      Birthdate = Birthdate(DateTime(1980, 1, 1)) }
+let person = createPerson "Alice" "Adams" (DateTime(1980, 1, 1))
 
-person |> jsonFromDomain |> printfn "%A"
+person |> Result.map jsonFromDomain |> printfn "%A"
 
 
 
