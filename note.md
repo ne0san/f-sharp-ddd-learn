@@ -2893,3 +2893,77 @@ type ColorDto =
 ### 選択型
 
 選択されている型を示す「タグ」と、各ケースに対応するデータを含むレコードとして表現可能
+
+特定のケースが DTO 変換されると、それ以外のフィールドは null(リストの場合は空)になると
+
+```fs
+type Name = {
+    First : String50
+    Last : String50
+}
+type Example =
+    | A
+    | B of int
+    | C of string list
+    | D of Name
+
+// シリアライズ可能なDTO型
+
+type NameDto = {
+    First : string
+    Last : string
+}
+
+type ExampleDto = {
+    Tag : string // "A" "B" "C" "D"
+    BData:Nullable<int>
+    CData:string[]
+    DData:NameDto
+}
+
+// シリアライズは、選択されたケースを変換し、それ以外をnullにする
+// デシリアライズする場合、「タグ」でパターンマッチ
+// デシリアライズ前に該当データがnullではないことを必ず確認する
+
+```
+
+### レコード型や選択型のマップを使ったデシリアライズ
+
+複合型の別のシリアライズ方法として、すべてをキーバリューマップとしてシリアライズする手もある
+
+全ての DTO は同じように.NET の型である IDictionary<string, obj>として実装される
+
+```fs
+let nameDtoFromDomain (name:Name) : IDictionary<string:ojb> =
+    let first = name.First |> String50.value :> obj
+    let last = name.Last |> String50.value :> obj
+    [
+        ("First", first)
+        ("Last", last)
+    ]
+    |> dict
+```
+
+ここではキーと値のペアから辞書を作成する
+
+これを JSON シリアライズすると
+あたかも別の NameDto 型をシリアライズしたかのような出力になる
+
+`:>` で明示的に obj にキャストする必要がある
+キーの値が選択型のどれかによって異なる
+
+### ジェネリクスによる共通構造の共有
+
+多くの場合、ドメイン方はジェネリック
+
+# 第 12 章 永続化
+
+ドメインモデルを設計する際に「永続化非依存」を考慮する
+
+DDD で営ぞ k 儒家を扱う一般的ガイドライン
+
+- 永続化を端に追いやる
+- コマンド(更新)とクエリ(読み取り)を分離
+- 境界付けられたコンテキストは、それぞれ独自のデータストアを持つ必要がある
+
+## 12-1 永続化を端に追いやる
