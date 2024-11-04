@@ -1,3 +1,4 @@
+open System
 // レコード型
 // フィールド3つが含まれる
 // AND型
@@ -60,3 +61,18 @@ printfn "%d" innerValue
 
 
 let processCustomerId (CustomerId innerValue) = printfn "%d" innerValue
+
+
+type ValidationError = ValidationError of string
+type UserId = private UserId of string
+
+module UserId =
+    let create userId =
+        if String.IsNullOrEmpty(userId) then
+            Error "UserId must not be null or empty"
+        elif userId.Length > 50 then
+            Error "UserId must not be more than 50 chars"
+        else
+            Ok(UserId userId)
+
+    let value (UserId userId) = userId
