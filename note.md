@@ -3193,3 +3193,183 @@ create table contact_phone(
 - 値オブジェクトの場合
   - 親データにインラインで
   - どの値オブジェクトの列かを明示した名前にする
+
+### RDB からの読み取り
+
+F#では ORM を使うことは少なく、生 SQL コマンドを直接扱う
+
+最も便利な方法は F#の SQL 型プロバイダを使う
+
+FSharp.Data.SqlClient 型プロバイダを使用する
+
+一般的になランタイムライブラリではなく、型プロバイダを使用することで、SQL 型プロバイダがコンパイル時に SQL クエリや SQL コマンドに応じた型を作成
+
+SQL がおかしければコンパイルエラー
+正しければ SQL の出力と完全一致するレコード型
+
+CustomerId で Customer を一つ取得する特
+
+まず、コンパイル時に使用する接続文字を定義
+
+`fs/12-5rdb.fsx`
+
+BirthDate は null 許容なので、dbRecord.Birthdate を option 型にしている
+
+```fs
+let bindOption f xOpt =
+    match xOpt with
+    | Some x -> f x |> Result.map Some
+    | None -> Ok None
+```
+
+カスタムの toDomain を書く
+不正なデータが絶対にないという場合は、result のエラーを例外に変換するヘルパーを使っていい
+
+いずれにしても toDomain があれば、DB から読み取り、その結果をドメインとして返すコードを書ける
+
+レコードなし or レコードあり or レコード複数すべてについて処理をしていること
+
+後でぬるりが起きるよりも事前に明示的に判断することがいい
+
+```fs
+let convertSingleDbRecord tableName idValue records toDomain =
+    match records with
+    | [] ->
+        let msg = sprintf "Not found. Table= %s Id= %A" tableName idValue
+        Error msg
+    | [ dbRecord ] -> dbRecord |> toDomain |> Ok
+    | _ ->
+        let msg = sprintf "Multiple records found. Table= %s Id= %A" tableName idValue
+        raise (DatabaseError msg)
+
+let readOneCustomer (productionConnection: SqlConnection) (CustomerId customerId) =
+    use cmd = new ReadOneCustomer(productionConnection)
+    let tableName = "customer"
+    let records = cmd.Execute(customerId = customerId) |> Seq.toList
+    convertSingleDbRecord tableName customerId records toDomain
+```
+
+### RDB から選択型を読み取る
+
+基本的には同じだが少し複雑
+
+単一のレコードで扱う場合、フラグでどのケースを作成するか判断
+
+ORM を使うべきでは?と思うが、ネストした選択型の処理ができない
+
+### RDB への書き込み
+
+ドメインオブジェクトを DTO に変換して、挿入 or 更新コマンドを実行
+SQL 型プロバイダですべてのテーブルに型を設定
+
+writeContact 関数を定義して DTO に変換後、insert
+
+もしくは手書き SQL で insert
+
+## 12-6 トランザクション
+
+多くの場合、まとめて全 or 無の保存が必要なものがある
+
+```fs
+let connection = new SqlConnection()
+markAsFullyPaidAndPaymentCompleted connection paymentId invoiceId
+```
+
+異なるサービスとコミュニケーションをとり、サービスをまたぐトランザクションを行う方法がない場合もある
+-> この場合、不具合検出プロセスや、失敗時に補填トランザクションを使用する
+
+↓ 例
+
+```fs
+markAsFullyPaid connection invoiceId
+
+let result = markPaymentCompleted connection paymentId
+
+match result with
+|Error err ->
+unmarkAsFullyPaid connection invoideId
+|Ok _ -> ...
+```
+
+## 12-7 まとめ
+
+- クエリとコマンドの分離
+- IO を端に追いやる
+- コンテキストが自身専用のデータストアを持つ
+- RDB 操作の仕組み
+
+# 13 章 設計を進化させ、きれいに保つ
+
+要件が変わるにつれてモデルが混とんとする。
+
+ドメイン駆動設計は一度だけではない
+開発者、DE、各ステークホルダが継続的に協力することを意味する
+
+要件が変わったら最初にドメインモデルを見直す
+
+- WF に新しいステップを追加
+- WF の入力を変更
+- 主要なドメイン型を変更、システムへの波及を確認
+- WF 全体をビジネスルールに適合するように変更
+
+## 13-1 送料の追加
+
+送料を請求する際、特別な計算方法を用いたいという要件
+↓
+必要な物事
+米国内への発想、米国内でも遠隔州かそうでないかで計算を分けるときなど、独特の条件でいくつも分離する
+
+### アクティブパターンによるビジネスロジックの簡素化
+
+ドメインに置ける「分類」の考え方を実際の価格設定ロジックから分離する
+
+F#にはアクティブパターンという機能がある
+条件分岐を名前付く選択しのセットに変えて、パターンマッチを可能にする
+
+```fs
+let (|UsLocalState|UsRoteState|International|) address =
+    if address.Country = "US" then
+        match address.State with
+        |"CA" | "OR" | "AZ" | "NV" ->
+            UsLocalState
+        | _ ->
+            UsRemoteState
+    else
+        International
+
+let calculateShippingCost validatedOrder =
+    match validatedOrder.ShippingAddress with
+    | UsLocalState -> 5.0
+    | UsRemoteState -> 10.0
+    | International -> 20.0
+```
+
+#### アクティブパターンとは
+
+### ワークフローに新しいステージを追加する
+
+上記の送料計算を使用する
+
+validate -> price -> acknowledge
+↓
+validate -> price -> AddShippingInfo -> acknowledge
+
+追加情報を把握するために新しい型がいくつか必要になる
+
+新しい方と既存型の合成にするか、既存型に新しい情報を含めてしまうか
+前者にはいくつか利点がある
+
+- 次のステップに必要な型が変わらない
+- 既存型に追加する場合、初期化の検討が必要
+
+送料は注文にどのように保存されるべきか
+
+- トップレベルのフィールドか
+- 新しい型の明細にしてしまうか
+  後者の場合、ヘッダーのフィールドを含めるための特別なロジックが不要
+  明細の合計から注文合計を計算できる
+  ただし、送料を複数作成してしまう可能性がある、印刷時の順序を気を付ける
+
+```fs
+
+```
