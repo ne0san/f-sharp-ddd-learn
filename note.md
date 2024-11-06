@@ -3370,6 +3370,107 @@ validate -> price -> AddShippingInfo -> acknowledge
   明細の合計から注文合計を計算できる
   ただし、送料を複数作成してしまう可能性がある、印刷時の順序を気を付ける
 
-```fs
+### パイプラインにステージを追加するその他の理由
 
+ステージが他のステージから隔離されていて、要求された型に適合して入れば、
+追加や削除を安全にできる
+
+- 運用上の透明性を高めるためのステージを追加すれば、パイプラインの内部で何が起きているか簡単に確認できる
+- 認可チェックするステージを追加すれば、権限が足りないときに残りのパイプラインをスキップできる
+- 設定や入力からのコンテキストに基づいて、コンポジションルートでステージを動的に追加・削除もできる
+
+## 13-2 VIP顧客への対応を追加
+
+VIPは送料無料や夜間配達などができる
+
+絶対に避けるべきなのは、ドメイン内のビジネスルールの出力をモデル化する(送料無料フラグを追加するなど)
+↓
+ビジネスルールへの入力(「顧客がVIPである」)を保存し、その入力に応じてビジネスルールを動作させる
+
+
+VIPステータスは、Webサイトへのログインと関連づいていると仮定
+
+既存型にパラメータを追加する方は、他の顧客状態と影響がありそう
+
+```fs
+type CustomerInfo ={
+    ...
+    IsVip : bool
+    ...
+}
+
+type CustomerStatus =
+|Normal of CustomerInfo
+| Vip of CustomerInfo
+type Order = {
+    ...
+    CustomerStatus:CustomerStatus
+    ...
+}
 ```
+
+最善は折衷案
+顧客情報とは独立した「VIP」か否かを表す情報を追加
+他のステータスが必要になったらその度に追加する
+
+```fs
+type VipStatus =
+|Normal
+|Vip
+
+type CustomerInfo ={
+    ...
+    VipStatus:VipStatus
+    ...
+}
+```
+
+### WFに新しい入力を追加する
+
+VipStatus<VIPステータス>フィールドを新設する前提で進める
+
+VipStatusはどこから取得するのか
+↓
+UnvalidatedCustomerInfoから
+↓
+DTOから
+
+
+つまりUnvalidatedCustomerInfoとDTO両方にフィールドを追加
+どちらも単なる文字列で、値が無いことはnullで表す
+
+```fs
+module Domain =
+    type UnvalidatedCustomerInfo = {
+        ...
+        VipStatus: string
+    }
+module Dto =
+    type CustomerInfo = {
+        ...
+        Vipstatus : string
+    }
+```
+
+そしてようやくUnvalidatedCustomerInfoのstatusフィールドを他のすべてのフィールドと共に使用して、ValudatedCustomerInfoを構築可能になる
+
+```fs
+let validatecustomerInfo unvalidatedCustomerInfo =
+    result {
+        ...
+        let! VipStatus = VipStatus.create unvalidatedCustomerinfo.VipStatus
+        let customerInfo : CustomerInfo ={
+            ...
+            VipStatus = VipStatus
+        }
+        return customerInfo
+    }
+```
+
+### 送料無料ルールをWFに追加
+
+新しいセグメントを表す型を定義
+```fs
+type FreevipShipping = ProcedOrderWithShippingMethod -> ProcedOrderWithShippingMethod
+```
+これをWFに挿入しておしまい
