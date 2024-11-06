@@ -3474,3 +3474,76 @@ let validatecustomerInfo unvalidatedCustomerInfo =
 type FreevipShipping = ProcedOrderWithShippingMethod -> ProcedOrderWithShippingMethod
 ```
 これをWFに挿入しておしまい
+
+## 13-3 プロモーションコードのサポート追加
+
+注文時にプロモーションコードを提示されたら割引する
+
+- 注文時に任意のプロモーションコードを入力させる
+- 入力されたコードが存在する時、特定の製品が別の価格で提供
+- 注文はプロモーションコード割引が適用されたことを明示
+
+### ドメインモデルにプロモーションコードを追加
+
+新しいプロモーションコードのフィールド
+```fs
+type PromotionCode = PromotionCode of string
+type ValidatedOrder = {
+    ...
+    PromotionCode : PromotionCode option
+}
+```
+この時点でコンパイルエラー
+
+UnvalidatedOrderとDTOも同様に追加
+DTOではnullが欠損値であることを示すため、optionではなくただのstring二する
+
+### 価格計算ロジック変更
+
+プロモーションコード有無で計算処理を分ける
+
+既存モデル↓
+```fs
+type GetProductPrice = ProductCode -> Price
+```
+
+プロモーションコードに基づいて異なるGetProductPrice関数を提供する
+
+- プロモーションコードがあるとき専用のGetProductPrice関数
+- 無ければ既存のGetProductPrice関数
+
+そこでファクトリー関数を使う
+```fs
+type GetPricingFunction = PromotionCode option -> GetProductPrice
+```
+↓optionだと不明確なので自己文書化できるように新しい型を作る
+```fs
+type ProcingMethod =
+| Standard
+| Promotion of PromotionCode
+```
+論理的には同等だが、ドメインモデルで分かりやすくする
+
+ValidatedOrder型は次のようになる
+```fs
+type ValidatedOrder ={
+    ... //他は同じ
+    PricingMethod : PricingMethod
+}
+```
+GetPricingFunctionは、次のように
+
+```fs
+type GetProcingFunction = PricingMethod -> GetProductPrice
+```
+さらにこれを新しい依存関係として注入
+
+ここでコンパイルエラーが出るけれどそれを解消していく
+
+### GetPricingFunctionの実装
+
+```fs
+type GetStandardPriceTable =
+    
+
+```
